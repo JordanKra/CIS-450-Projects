@@ -22,52 +22,88 @@ void *Producer (void *); // the two threads
 void *Consumer (void *);
 
 sem_t empty, full;       //global semaphores
-int data;                // shared buffer, size = 1
+pthread_mutex_t mutex;   //global mutex lock for critical section
+int bufferSize;
+int *data;                // shared buffer, size = 1
 int numIters;
+
 
 // main() -- read command line and create threads
 int main(int argc, char *argv[]) {
-    pthread_t pid, cid;
+    pthread_t pid1, pid2, pid3, cid1, cid2, cid3;
 
-    sem_init(&empty, SHARED, 1);    // sem empty = 1
-    sem_init(&full, SHARED, 0); //sem full = 0
-
-    if (argc < 2) {
-	    printf("Usage: boundedBuffer <Number of Iterations>\n");
-	    printf(" e.g.: ./boundedBuffer 100 \n"); 
+    if (argc < 3 || atoi(argv[2]) < 1) {
+	    printf("Usage: boundedBuffer <Number of Iterations> <Buffer Size>\n");
+	    printf(" e.g.: ./boundedBuffer 100 50\n");
 	    exit(0);
     }
     numIters = atoi(argv[1]);
+    bufferSize = atoi(argv[2]);
+    int bufArray[bufferSize];
+    data = bufArray;
 
-    pthread_create(&pid, NULL, Producer, NULL);
-    pthread_create(&cid, NULL, Consumer, NULL);
+    sem_init(&empty, SHARED, bufferSize);    // sem empty = buffer size
+    sem_init(&full, SHARED, 0); //sem full = 0
+    pthread_mutex_init(&mutex, NULL);
 
-    pthread_join(pid, NULL);
-    pthread_join(cid, NULL);
+    //Create 3 threads that produce and three threads that consume
+    pthread_create(&pid1, NULL, Producer, NULL);
+    pthread_create(&pid2, NULL, Producer, NULL);
+    pthread_create(&pid3, NULL, Producer, NULL);
+
+    pthread_create(&cid1, NULL, Consumer, NULL);
+    pthread_create(&cid2, NULL, Consumer, NULL);
+    pthread_create(&cid3, NULL, Consumer, NULL);
+
+    pthread_join(pid1, NULL);
+    pthread_join(cid1, NULL);
+
+    pthread_join(pid2, NULL);
+    pthread_join(cid2, NULL);
+
+    pthread_join(pid3, NULL);
+    pthread_join(cid3, NULL);
     pthread_exit(0);
 }
 
 // deposit 1, ..., numIters into the data buffer
 void *Producer(void *arg) {
     int produced;
+    int rear = 0;
+
 
     for (produced = 0; produced < numIters; produced++) {
         sem_wait(&empty);
-        data = produced;
+        pthread_mutex_lock(&mutex);
+        data[rear] = produced;
+        //wrap around if you hit the end of the buffer
+        if(rear+1 > bufferSize){
+            rear = 0;
+        }
+        pthread_mutex_unlock(&mutex);
         sem_post(&full);
     }
+    return 0;
 }
 
 //fetch numIters items from the buffer and sum them
 void *Consumer(void *arg) {
     int total = 0;
     int consumed;
+    int front = 0;
 
     for (consumed = 0; consumed < numIters; consumed++) {
         sem_wait(&full);
-        total = total + data;
+        pthread_mutex_lock(&mutex);
+        total = total + data[front];
+        //wrap around if you hit the end of the buffer
+        if(front+1 > bufferSize){
+            front = 0;
+        };
+        pthread_mutex_unlock(&mutex);
         sem_post(&empty);
     }
-
     printf("the total is %d\n", total);
+    return 0;
 }
+
