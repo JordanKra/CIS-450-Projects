@@ -21,12 +21,13 @@
 void *Producer (void *); // the two threads
 void *Consumer (void *);
 
-sem_t empty, full;       //global semaphores
-pthread_mutex_t mutex;   //global mutex lock for critical section
+sem_t empty, full, mutex;       //global semaphores
+//pthread_mutex_t mutex;   //global mutex lock for critical section
 int bufferSize;
 int *data;                // shared buffer, size = 1
 int numIters;
-
+int rear = 0;
+int front = 0;
 
 // main() -- read command line and create threads
 int main(int argc, char *argv[]) {
@@ -44,7 +45,7 @@ int main(int argc, char *argv[]) {
 
     sem_init(&empty, SHARED, bufferSize);    // sem empty = buffer size
     sem_init(&full, SHARED, 0); //sem full = 0
-    pthread_mutex_init(&mutex, NULL);
+    sem_init(&mutex, SHARED, 1);
 
     //Create 3 threads that produce and three threads that consume
     pthread_create(&pid1, NULL, Producer, NULL);
@@ -69,18 +70,15 @@ int main(int argc, char *argv[]) {
 // deposit 1, ..., numIters into the data buffer
 void *Producer(void *arg) {
     int produced;
-    int rear = 0;
 
 
     for (produced = 0; produced < numIters; produced++) {
         sem_wait(&empty);
-        pthread_mutex_lock(&mutex);
+        sem_wait(&mutex);
         data[rear] = produced;
         //wrap around if you hit the end of the buffer
-        if(rear+1 > bufferSize){
-            rear = 0;
-        }
-        pthread_mutex_unlock(&mutex);
+        rear = (rear+1) % bufferSize;
+        sem_post(&mutex);
         sem_post(&full);
     }
     return 0;
@@ -90,17 +88,14 @@ void *Producer(void *arg) {
 void *Consumer(void *arg) {
     int total = 0;
     int consumed;
-    int front = 0;
 
     for (consumed = 0; consumed < numIters; consumed++) {
         sem_wait(&full);
-        pthread_mutex_lock(&mutex);
+        sem_wait(&mutex);
         total = total + data[front];
         //wrap around if you hit the end of the buffer
-        if(front+1 > bufferSize){
-            front = 0;
-        };
-        pthread_mutex_unlock(&mutex);
+        front = (front+1) % bufferSize;
+        sem_post(&mutex);
         sem_post(&empty);
     }
     printf("the total is %d\n", total);
