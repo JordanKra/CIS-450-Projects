@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <inttypes.h>
-#include <semaphore.h>
 #include <stdbool.h>
 
 
@@ -12,47 +11,55 @@ pthread_cond_t cross_cv;
 //Keep track of the direction of the car currently on the bridge
 int current_dir = -1;
 bool bridge_occupied = false;
+int num_on_bridge = 0;
+struct args{
+    int dir;
+    int num;
+};
 
 
-void ArriveBridge(int dir){
-    printf("Car has arrived at the bridge with direction: %d\n", dir);
+void ArriveBridge(int dir, int num){
+    printf("Car %d direction %d arrives at the bridge\n",num, dir);
     pthread_mutex_lock(&cross_mutex);
     while(bridge_occupied){
-        /*if(current_dir == dir){
-            //Check if our direction is the same as the current cars direction
-            //If it is we can go as well
-            //TODO: ensure that this functionality is actually wanted
+        if(current_dir == dir && num_on_bridge < 3){
+            //We can cross the bridge as well
             break;
-        }*/
+        }
         pthread_cond_wait(&cross_cv, &cross_mutex);
     }
     //set current_dir to be current threads dir
     current_dir = dir;
     bridge_occupied = true;
+    num_on_bridge++;
     pthread_mutex_unlock(&cross_mutex);
     sched_yield();
 }
 
-void CrossBridge(){
-    printf("Car is crossing the bridge in direction: %d\n", current_dir);
-    sched_yield();
+void CrossBridge(int num){
+    pthread_mutex_lock(&cross_mutex);
+    printf("Car %d is crossing the bridge. Current dir %d #cars: %d\n",num, current_dir, num_on_bridge);
+    pthread_mutex_unlock(&cross_mutex);
 }
 
-void ExitBridge(int dir){
+void ExitBridge(int dir, int num){
     pthread_mutex_lock(&cross_mutex);
     //Weve reached the other side of the bridge so we can set bridge_occupied to false
     //and signal for the next thread
-    printf("Car has exited the bridge with dir: %d\n", current_dir);
+    printf("Car number %d has exited the bridge with dir: %d\n", num, dir);
     bridge_occupied = false;
-    pthread_cond_signal(&cross_cv);
+    num_on_bridge--;
+    pthread_cond_broadcast(&cross_cv);
     pthread_mutex_unlock(&cross_mutex);
     sched_yield();
 }
 
-void *OneVehicle(void *dir){
-    ArriveBridge(*(int*)dir);
-    CrossBridge();
-    ExitBridge(*(int*)dir);
+void *OneVehicle(void *thread_args){
+    struct args *arguments = (struct args*)thread_args;
+    ArriveBridge((*arguments).dir, (*arguments).num);
+    CrossBridge((*arguments).num);
+    ExitBridge((*arguments).dir, (*arguments).num);
+    free(thread_args);
     return 0;
 }
 
@@ -70,10 +77,13 @@ int main(int argc, char *argv[]){
     pthread_t threads[num_cars];
 
     for(int i = 0; i < num_cars; i++){
+        //Allocate memory for this threads arguments
+        struct args* arguments = (args*)malloc(sizeof(struct args));
         //Generate a direction and create a new thread with that direction
-        dir = rand() % 2;
-        //printf("Direction: %d\n", dir);
-        pthread_create(&threads[i],NULL, &OneVehicle, (void*)&dir);
+        (*arguments).dir = rand() % 2;
+        (*arguments).num = i;
+
+        pthread_create(&threads[i],NULL, &OneVehicle, (void*)arguments);
     }
     for(int i = 0; i < num_cars; i++){
         pthread_join(threads[i], NULL);
