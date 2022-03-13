@@ -22,7 +22,6 @@ void *Producer (void *); // the two threads
 void *Consumer (void *);
 
 sem_t empty, full, mutex;       //global semaphores
-//pthread_mutex_t mutex;   //global mutex lock for critical section
 int bufferSize;
 int *data;                // shared buffer, size = 1
 int numIters;
