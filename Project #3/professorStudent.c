@@ -35,6 +35,7 @@ void QuestionStart(int student_number){
 
 void QuestionDone(int student_number){
     printf("Student number %d has finished asking a question\n", student_number);
+    //Tell the professor the student is ready for an answer and wait until the answer is done
     sem_post(&ready_for_answer);
     sem_wait(&answer_done);
     printf("Student number: %d has recieved an answer and has left\n", student_number);
@@ -45,6 +46,7 @@ void QuestionDone(int student_number){
 void *TheProfessor(void *num_students){
     int i = *((int*)(num_students));
     while(i > 0){
+        //loop for as many iterations as there are students
         AnswerStart();
         printf("The professor is answering a question\n");
         AnswerDone();

@@ -86,11 +86,12 @@ int main(int argc, char *argv[]){
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 
     if(argc < 2){
-        printf("Usage: oneLaneBridge <Number of Cars>\n");
-        printf(" e.g.: ./oneLaneBridge 50\n");
-        exit(0);
+        num_cars = 50;
     }
-    num_cars = atoi(argv[1]);
+    else{
+        //Number of cars is a command line parameter so that testing with multiple cars can be done
+        num_cars = atoi(argv[1]);
+    }
     pthread_t threads[num_cars];
 
     for(int i = 0; i < num_cars; i++){
